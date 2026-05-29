@@ -1,0 +1,28 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" fill="none"/>
+  <g filter="url(#shadow)">
+    <path d="M112 37C112 26.5066 120.507 18 131 18H307L421 132V455C421 465.493 412.493 474 402 474H131C120.507 474 112 465.493 112 455V37Z" fill="url(#page)"/>
+    <path d="M307 18L421 132H327C315.954 132 307 123.046 307 112V18Z" fill="url(#fold)"/>
+    <path d="M307 18L421 132H327C315.954 132 307 123.046 307 112V18Z" fill="white" fill-opacity="0.56"/>
+    <path d="M306 19.5V112C306 123.598 315.402 133 327 133H419.5" stroke="#D8D8D8" stroke-opacity="0.55" stroke-width="2"/>
+  </g>
+  <g opacity="0.92">
+    <rect x="170" y="175" width="172" height="134" rx="18" stroke="#B7B7B7" stroke-width="12"/>
+    <circle cx="224" cy="225" r="17" fill="#B7B7B7"/>
+    <path d="M181 281L211 254C218.077 247.631 228.767 247.516 235.98 253.73L246 262.364L271.97 240.514C279.805 233.922 291.423 234.396 298.696 241.604L331 273.62V291H181V281Z" fill="#B7B7B7"/>
+  </g>
+  <text x="256" y="441" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="400" fill="#B7B7B7">JPG</text>
+  <defs>
+    <filter id="shadow" x="88" y="0" width="357" height="500" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000000" flood-opacity="0.22"/>
+    </filter>
+    <linearGradient id="page" x1="143" y1="47" x2="414" y2="451" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F5F5F5"/>
+      <stop offset="1" stop-color="#EAEAEA"/>
+    </linearGradient>
+    <linearGradient id="fold" x1="342" y1="53" x2="396" y2="128" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EFEFEF"/>
+    </linearGradient>
+  </defs>
+</svg>
