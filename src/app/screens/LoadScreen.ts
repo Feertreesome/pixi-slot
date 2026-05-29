@@ -1,13 +1,12 @@
 import { CircularProgressBar } from "@pixi/ui";
 import { animate } from "motion";
 import type { ObjectTarget } from "motion/react";
-import { Container, Sprite, Texture } from "pixi.js";
+import { Container } from "pixi.js";
 
 /** Screen shown while loading assets */
 export class LoadScreen extends Container {
   /** Assets bundles required by this screen */
   public static assetBundles = ["preload"];
-  private fileIcon: Sprite;
   /** Progress Bar */
   private progressBar: CircularProgressBar;
 
@@ -29,12 +28,6 @@ export class LoadScreen extends Container {
     this.progressBar.y += -this.progressBar.height / 2;
 
     this.addChild(this.progressBar);
-
-    this.fileIcon = new Sprite({
-      texture: Texture.from("logo.svg"),
-      anchor: 0.5,
-    });
-    this.addChild(this.fileIcon);
   }
 
   public onLoad(progress: number) {
