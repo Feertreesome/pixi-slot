@@ -1,5 +1,3 @@
-import { animate } from "motion";
-import type { ObjectTarget } from "motion/react";
 import type { Ticker } from "pixi.js";
 import { Container, Graphics } from "pixi.js";
 
@@ -10,6 +8,8 @@ import { Button } from "../../ui/Button.ts";
 import {
   SLOT_BOARD_HEIGHT,
   SLOT_BOARD_WIDTH,
+  MOBILE_MARGIN,
+  SLOT_MIDDLE_ROW_INDEX,
   SLOT_REEL_COUNT,
   SLOT_REEL_GAP,
   SLOT_REEL_STOP_DELAY_MS,
@@ -19,6 +19,7 @@ import {
 } from "./slotConfig.ts";
 import {
   PaytablePanel,
+  MOBILE_PAYTABLE_HEIGHT,
   PAYTABLE_PANEL_HEIGHT,
   PAYTABLE_PANEL_WIDTH,
 } from "./PaytablePanel.ts";
@@ -39,12 +40,15 @@ const FRAME_PADDING = 26;
 const CONTROL_PANEL_WIDTH = 760;
 const CONTROL_PANEL_HEIGHT = 280;
 const PAYTABLE_GAP = 28;
+const WIN_FRAME_FLASH_DURATION_MS = 550;
+const MOBILE_REEL_WIDTH_RATIO = 0.95;
 const REEL_FRAME_WIDTH = SLOT_BOARD_WIDTH + FRAME_PADDING * 2;
 const REEL_FRAME_HEIGHT = SLOT_BOARD_HEIGHT + FRAME_PADDING * 2;
 const MACHINE_WIDTH = Math.max(
   REEL_FRAME_WIDTH + PAYTABLE_GAP + PAYTABLE_PANEL_WIDTH,
   CONTROL_PANEL_WIDTH,
 );
+const DESKTOP_FRAME_X = (MACHINE_WIDTH - REEL_FRAME_WIDTH) * 0.5;
 const MACHINE_HEIGHT = Math.max(
   SLOT_BOARD_HEIGHT + CONTROL_PANEL_HEIGHT + 96,
   PAYTABLE_PANEL_HEIGHT,
@@ -57,6 +61,7 @@ function getRandomSymbolId(): SlotSymbolId {
 
 /** Coordinates reels, controls, and simple placeholder slot rules. */
 export class SlotMachine extends Container {
+  private reelArea: Container;
   private frameShadow: Graphics;
   private frame: Graphics;
   private glassOverlay: Graphics;
@@ -69,6 +74,9 @@ export class SlotMachine extends Container {
   private reels: Reel[] = [];
   private paytablePanel: PaytablePanel;
   private hud: SlotHud;
+  private spinButtonLayout: Container;
+  private autoSpinButtonLayout: Container;
+  private maxBetButtonLayout: Container;
   private spinButton: Button;
   private autoSpinButton: Button;
   private maxBetButton: Button;
@@ -77,25 +85,33 @@ export class SlotMachine extends Container {
   private currentSpinResult?: SpinResult;
   private isSpinning = false;
   private isAutoSpin = false;
+  private winFeedbackStartTime?: number;
 
   constructor() {
     super();
 
+    this.reelArea = new Container();
+    this.addChild(this.reelArea);
+
     this.frameShadow = new Graphics();
-    this.addChild(this.frameShadow);
+    this.frameShadow.eventMode = "none";
+    this.reelArea.addChild(this.frameShadow);
 
     this.frame = new Graphics();
-    this.addChild(this.frame);
+    this.frame.eventMode = "none";
+    this.reelArea.addChild(this.frame);
 
     this.glassOverlay = new Graphics();
-    this.addChild(this.glassOverlay);
+    this.glassOverlay.eventMode = "none";
+    this.reelArea.addChild(this.glassOverlay);
 
     this.reelSeparators = new Graphics();
-    this.addChild(this.reelSeparators);
+    this.reelSeparators.eventMode = "none";
+    this.reelArea.addChild(this.reelSeparators);
 
     this.board = new Container();
     this.board.position.set(FRAME_PADDING, FRAME_PADDING);
-    this.addChild(this.board);
+    this.reelArea.addChild(this.board);
 
     for (let i = 0; i < SLOT_REEL_COUNT; i++) {
       const reel = new Reel(i, i * SLOT_REEL_STOP_DELAY_MS);
@@ -107,7 +123,7 @@ export class SlotMachine extends Container {
 
     this.paylineView = new PaylineView(SLOT_BOARD_WIDTH, SLOT_BOARD_HEIGHT);
     this.paylineView.position.set(FRAME_PADDING, FRAME_PADDING);
-    this.addChild(this.paylineView);
+    this.reelArea.addChild(this.paylineView);
 
     this.paytablePanel = new PaytablePanel();
     this.paytablePanel.position.set(
@@ -120,18 +136,24 @@ export class SlotMachine extends Container {
     this.addChild(this.paytablePanel);
 
     this.controlPanel = new Graphics();
+    this.controlPanel.eventMode = "none";
     this.addChild(this.controlPanel);
 
     this.winHighlight = new Graphics();
+    this.winHighlight.eventMode = "none";
     this.winHighlight.alpha = 0;
-    this.addChild(this.winHighlight);
+    this.reelArea.addChild(this.winHighlight);
 
     this.hud = new SlotHud();
     this.hud.position.set(MACHINE_WIDTH * 0.5, SLOT_BOARD_HEIGHT + 126);
     this.addChild(this.hud);
 
     this.spinGlow = new Graphics();
+    this.spinGlow.eventMode = "none";
     this.addChild(this.spinGlow);
+
+    this.spinButtonLayout = new Container();
+    this.addChild(this.spinButtonLayout);
 
     this.spinButton = new Button({
       text: "SPIN",
@@ -140,11 +162,13 @@ export class SlotMachine extends Container {
       fontSize: 40,
     });
     this.spinButton.tint = 0xd9284f;
-    this.spinButton.position.set(MACHINE_WIDTH * 0.5, SLOT_BOARD_HEIGHT + 286);
     this.spinButton.onPress.connect(() => {
       void this.spin();
     });
-    this.addChild(this.spinButton);
+    this.spinButtonLayout.addChild(this.spinButton);
+
+    this.autoSpinButtonLayout = new Container();
+    this.addChild(this.autoSpinButtonLayout);
 
     this.autoSpinButton = new Button({
       text: "AUTO SPIN",
@@ -153,14 +177,13 @@ export class SlotMachine extends Container {
       fontSize: 21,
     });
     this.autoSpinButton.tint = 0x6d39bd;
-    this.autoSpinButton.position.set(
-      MACHINE_WIDTH * 0.5 - 260,
-      SLOT_BOARD_HEIGHT + 286,
-    );
     this.autoSpinButton.onPress.connect(() => {
       void this.toggleAutoSpin();
     });
-    this.addChild(this.autoSpinButton);
+    this.autoSpinButtonLayout.addChild(this.autoSpinButton);
+
+    this.maxBetButtonLayout = new Container();
+    this.addChild(this.maxBetButtonLayout);
 
     this.maxBetButton = new Button({
       text: "MAX BET",
@@ -169,14 +192,11 @@ export class SlotMachine extends Container {
       fontSize: 21,
     });
     this.maxBetButton.tint = 0x6d39bd;
-    this.maxBetButton.position.set(
-      MACHINE_WIDTH * 0.5 + 260,
-      SLOT_BOARD_HEIGHT + 286,
-    );
     this.maxBetButton.onPress.connect(() => this.setMaxBet());
-    this.addChild(this.maxBetButton);
+    this.maxBetButtonLayout.addChild(this.maxBetButton);
 
     this.drawChrome();
+    this.layoutDesktop(MACHINE_WIDTH, MACHINE_HEIGHT);
     this.updateHud();
   }
 
@@ -185,8 +205,7 @@ export class SlotMachine extends Container {
 
     this.setSpinning(true);
     this.win = 0;
-    this.paylineView.setWinning(false);
-    this.clearReelHighlights();
+    this.clearWinFeedback();
     this.updateHud();
 
     // Generate the full outcome before animation starts.
@@ -217,13 +236,16 @@ export class SlotMachine extends Container {
       : this.getNoWinResult();
 
     this.win = winResult.amount;
-    this.paylineView.setWinning(winResult.amount > 0);
-    this.applyWinningHighlights(winResult.winningReelIndexes);
-    if (this.win > 0) {
-      await this.playWinHighlight();
-    }
     this.setSpinning(false);
     this.updateHud();
+
+    if (this.win > 0) {
+      this.paylineView.setWinning(true);
+      this.applyWinningHighlights(winResult.winningReelIndexes);
+      this.startWinFeedback();
+    } else {
+      this.clearWinFeedback();
+    }
   }
 
   public getContentWidth(): number {
@@ -234,7 +256,7 @@ export class SlotMachine extends Container {
     return MACHINE_HEIGHT;
   }
 
-  public setSize(width: number, height: number) {
+  public layoutDesktop(width: number, height: number) {
     const boardScale = Math.min(
       width / MACHINE_WIDTH,
       height / MACHINE_HEIGHT,
@@ -242,9 +264,90 @@ export class SlotMachine extends Container {
     );
 
     this.scale.set(boardScale);
+    this.reelArea.scale.set(1);
+    this.reelArea.position.set(DESKTOP_FRAME_X, 0);
+    this.controlPanel.visible = true;
+    this.hud.layoutDesktop();
+    this.hud.position.set(MACHINE_WIDTH * 0.5, SLOT_BOARD_HEIGHT + 126);
+    this.paytablePanel.layoutDesktop();
+    this.paytablePanel.scale.set(1);
+    this.paytablePanel.position.set(
+      DESKTOP_FRAME_X +
+        REEL_FRAME_WIDTH +
+        PAYTABLE_GAP +
+        PAYTABLE_PANEL_WIDTH * 0.5,
+      REEL_FRAME_HEIGHT * 0.5,
+    );
+    this.spinButtonLayout.scale.set(1);
+    this.spinButtonLayout.position.set(
+      MACHINE_WIDTH * 0.5,
+      SLOT_BOARD_HEIGHT + 286,
+    );
+    this.autoSpinButtonLayout.scale.set(1);
+    this.autoSpinButtonLayout.position.set(
+      MACHINE_WIDTH * 0.5 - 260,
+      SLOT_BOARD_HEIGHT + 286,
+    );
+    this.maxBetButtonLayout.scale.set(1);
+    this.maxBetButtonLayout.position.set(
+      MACHINE_WIDTH * 0.5 + 260,
+      SLOT_BOARD_HEIGHT + 286,
+    );
+    this.spinGlow.position.copyFrom(this.spinButtonLayout.position);
+  }
+
+  public layoutMobile(width: number, height: number) {
+    const reelWidth = width * MOBILE_REEL_WIDTH_RATIO;
+    const controlsWidth = width - MOBILE_MARGIN;
+    const paytableWidth = width - MOBILE_MARGIN * 2;
+    const reelScale = reelWidth / REEL_FRAME_WIDTH;
+    const reelHeight = REEL_FRAME_HEIGHT * reelScale;
+    const layoutGap = height < 760 ? 8 : MOBILE_MARGIN;
+    const spinButtonScale = Math.min(1, controlsWidth / 340);
+    const spinButtonHalfHeight = 61 * spinButtonScale;
+    const secondaryButtonScale = Math.min(
+      1,
+      (controlsWidth - layoutGap) / (188 * 2),
+    );
+    const secondaryButtonHalfHeight = 36 * secondaryButtonScale;
+    const hudY = reelHeight + layoutGap + 41;
+    const spinY = hudY + 41 + layoutGap + spinButtonHalfHeight;
+    const secondaryButtonY =
+      spinY + spinButtonHalfHeight + layoutGap + secondaryButtonHalfHeight;
+    const paytableY =
+      secondaryButtonY +
+      secondaryButtonHalfHeight +
+      layoutGap +
+      MOBILE_PAYTABLE_HEIGHT * 0.5;
+
+    this.scale.set(1);
+    this.pivot.set(0);
+    this.reelArea.scale.set(reelScale);
+    this.reelArea.position.set((width - REEL_FRAME_WIDTH * reelScale) * 0.5, 0);
+    this.controlPanel.visible = false;
+    this.hud.layoutMobile(controlsWidth);
+    this.hud.position.set(width * 0.5, hudY);
+    this.spinButtonLayout.scale.set(spinButtonScale);
+    this.spinButtonLayout.position.set(width * 0.5, spinY);
+    this.autoSpinButtonLayout.scale.set(secondaryButtonScale);
+    this.autoSpinButtonLayout.position.set(
+      width * 0.5 - controlsWidth * 0.26,
+      secondaryButtonY,
+    );
+    this.maxBetButtonLayout.scale.set(secondaryButtonScale);
+    this.maxBetButtonLayout.position.set(
+      width * 0.5 + controlsWidth * 0.26,
+      secondaryButtonY,
+    );
+    this.paytablePanel.layoutMobile(paytableWidth);
+    this.paytablePanel.scale.set(1);
+    this.paytablePanel.position.set(width * 0.5, paytableY);
+    this.spinGlow.position.copyFrom(this.spinButtonLayout.position);
   }
 
   public update(time: Ticker) {
+    this.hud.update(time);
+    this.updateWinHighlight(time.lastTime);
     this.paylineView.update(time);
     for (const reel of this.reels) {
       reel.update(time);
@@ -301,8 +404,41 @@ export class SlotMachine extends Container {
     if (winningReelIndexes.length <= 0) return;
 
     for (let i = 0; i < this.reels.length; i++) {
-      this.reels[i].setWinningRowHighlight(1, winningReelIndexes.includes(i));
+      this.reels[i].setWinningRowHighlight(
+        SLOT_MIDDLE_ROW_INDEX,
+        winningReelIndexes.includes(i),
+      );
     }
+  }
+
+  private startWinFeedback() {
+    const startTime = performance.now();
+
+    this.winFeedbackStartTime = startTime;
+    this.hud.startWinFeedback(this.win, startTime);
+  }
+
+  private clearWinFeedback() {
+    this.winFeedbackStartTime = undefined;
+    this.winHighlight.alpha = 0;
+    this.hud.clearWinFeedback();
+    this.paylineView.setWinning(false);
+    this.clearReelHighlights();
+  }
+
+  private updateWinHighlight(timeMs: number) {
+    if (this.winFeedbackStartTime === undefined) return;
+
+    const progress =
+      (timeMs - this.winFeedbackStartTime) / WIN_FRAME_FLASH_DURATION_MS;
+
+    if (progress >= 1) {
+      this.winFeedbackStartTime = undefined;
+      this.winHighlight.alpha = 0;
+      return;
+    }
+
+    this.winHighlight.alpha = Math.sin(progress * Math.PI) * 0.78;
   }
 
   private updateHud() {
@@ -339,7 +475,7 @@ export class SlotMachine extends Container {
   }
 
   private getMiddleSymbol(result: ReelResult): SlotSymbolId {
-    return result.symbols[Math.floor(result.symbols.length / 2)]!;
+    return result.symbols[SLOT_MIDDLE_ROW_INDEX]!;
   }
 
   private calculateWin(middleSymbols: SlotSymbolId[]): WinCalculationResult {
@@ -375,7 +511,7 @@ export class SlotMachine extends Container {
     }
 
     const symbolConfig = SLOT_SYMBOLS.find(
-        (symbol) => symbol.id === bestSymbolId,
+      (symbol) => symbol.id === bestSymbolId,
     );
 
     if (!symbolConfig) {
@@ -387,8 +523,8 @@ export class SlotMachine extends Container {
       symbolId: bestSymbolId,
       count: bestCount,
       winningReelIndexes: Array.from(
-          { length: bestCount },
-          (_, i) => bestStartIndex + i,
+        { length: bestCount },
+        (_, i) => bestStartIndex + i,
       ),
     };
   }
@@ -405,47 +541,38 @@ export class SlotMachine extends Container {
   private drawChrome() {
     const frameWidth = REEL_FRAME_WIDTH;
     const frameHeight = REEL_FRAME_HEIGHT;
-    const frameX = (MACHINE_WIDTH - frameWidth) * 0.5;
 
     this.frameShadow
       .clear()
-      .ellipse(
-        frameX + frameWidth * 0.5,
-        frameHeight + 28,
-        frameWidth * 0.55,
-        32,
-      )
+      .ellipse(frameWidth * 0.5, frameHeight + 28, frameWidth * 0.55, 32)
       .fill({ color: 0x05000c, alpha: 0.5 })
-      .roundRect(frameX + 14, 18, frameWidth, frameHeight, 34)
+      .roundRect(14, 18, frameWidth, frameHeight, 34)
       .fill({ color: 0x090116, alpha: 0.62 });
 
     this.frame
       .clear()
-      .roundRect(frameX - 8, -8, frameWidth + 16, frameHeight + 16, 42)
+      .roundRect(-8, -8, frameWidth + 16, frameHeight + 16, 42)
       .fill({ color: 0x5f3408 })
-      .roundRect(frameX, 0, frameWidth, frameHeight, 34)
+      .roundRect(0, 0, frameWidth, frameHeight, 34)
       .fill({ color: 0xd39125 })
-      .roundRect(frameX + 8, 8, frameWidth - 16, frameHeight - 16, 28)
+      .roundRect(8, 8, frameWidth - 16, frameHeight - 16, 28)
       .fill({ color: 0xffdf7d })
-      .roundRect(frameX + 18, 18, frameWidth - 36, frameHeight - 36, 20)
+      .roundRect(18, 18, frameWidth - 36, frameHeight - 36, 20)
       .fill({ color: 0x1b0735 })
-      .roundRect(frameX + 28, 28, frameWidth - 56, frameHeight - 56, 14)
+      .roundRect(28, 28, frameWidth - 56, frameHeight - 56, 14)
       .fill({ color: 0x2a0a4e });
 
     this.glassOverlay
       .clear()
-      .roundRect(frameX + 28, 30, frameWidth - 56, frameHeight * 0.34, 16)
+      .roundRect(28, 30, frameWidth - 56, frameHeight * 0.34, 16)
       .fill({ color: 0xffffff, alpha: 0.085 })
-      .roundRect(frameX + 28, frameHeight - 62, frameWidth - 56, 34, 12)
+      .roundRect(28, frameHeight - 62, frameWidth - 56, 34, 12)
       .fill({ color: 0x05000c, alpha: 0.2 });
 
     this.reelSeparators.clear();
     for (let i = 1; i < SLOT_REEL_COUNT; i++) {
       const separatorX =
-        frameX +
-        FRAME_PADDING +
-        i * SLOT_SYMBOL_SIZE +
-        (i - 0.5) * SLOT_REEL_GAP;
+        FRAME_PADDING + i * SLOT_SYMBOL_SIZE + (i - 0.5) * SLOT_REEL_GAP;
 
       this.reelSeparators
         .roundRect(
@@ -466,8 +593,8 @@ export class SlotMachine extends Container {
         .fill({ color: 0xffd76b, alpha: 0.58 });
     }
 
-    this.board.x = frameX + FRAME_PADDING;
-    this.paylineView.x = frameX + FRAME_PADDING;
+    this.board.x = FRAME_PADDING;
+    this.paylineView.x = FRAME_PADDING;
 
     const panelX = (MACHINE_WIDTH - CONTROL_PANEL_WIDTH) * 0.5;
     const panelY = SLOT_BOARD_HEIGHT + 74;
@@ -495,22 +622,13 @@ export class SlotMachine extends Container {
 
     this.winHighlight
       .clear()
-      .roundRect(frameX - 10, -10, frameWidth + 20, frameHeight + 20, 40)
+      .roundRect(-10, -10, frameWidth + 20, frameHeight + 20, 40)
       .fill({ color: 0xfff2a8, alpha: 0.82 });
 
     this.spinGlow
       .clear()
       .circle(0, 0, 112)
       .fill({ color: 0xff305f, alpha: 0.48 });
-    this.spinGlow.position.copyFrom(this.spinButton.position);
-  }
-
-  private async playWinHighlight() {
-    this.winHighlight.alpha = 0;
-    await animate(
-      this.winHighlight,
-      { alpha: [0, 0.78, 0] } as ObjectTarget<Graphics>,
-      { duration: 0.55, ease: "easeOut" },
-    );
+    this.spinGlow.position.copyFrom(this.spinButtonLayout.position);
   }
 }

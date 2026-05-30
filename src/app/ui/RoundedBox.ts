@@ -19,9 +19,11 @@ export class RoundedBox extends Container {
   private image: NineSliceSprite;
   /** Optional shadow matching the box image, with y offest */
   private shadow?: NineSliceSprite;
+  private shadowOffset = 0;
 
   constructor(options: Partial<RoundedBoxOptions> = {}) {
     super();
+    this.eventMode = "none";
     const opts = { ...defaultRoundedBoxOptions, ...options };
     this.image = new NineSliceSprite({
       texture: Texture.from("rounded-rectangle.png"),
@@ -38,6 +40,7 @@ export class RoundedBox extends Container {
     this.addChild(this.image);
 
     if (opts.shadow) {
+      this.shadowOffset = opts.shadowOffset;
       this.shadow = new NineSliceSprite({
         texture: Texture.from("rounded-rectangle.png"),
         leftWidth: 34,
@@ -62,5 +65,17 @@ export class RoundedBox extends Container {
   /** Get the base height, without counting the shadow */
   public get boxHeight() {
     return this.image.height;
+  }
+
+  public setSize(width: number, height: number) {
+    this.image.width = width;
+    this.image.height = height;
+    this.image.position.set(-width * 0.5, -height * 0.5);
+
+    if (this.shadow) {
+      this.shadow.width = width;
+      this.shadow.height = height;
+      this.shadow.position.set(-width * 0.5, -height * 0.5 + this.shadowOffset);
+    }
   }
 }

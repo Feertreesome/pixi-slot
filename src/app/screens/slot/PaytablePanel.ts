@@ -7,6 +7,7 @@ import { SLOT_SYMBOLS } from "./slotConfig.ts";
 
 export const PAYTABLE_PANEL_WIDTH = 270;
 export const PAYTABLE_PANEL_HEIGHT = 430;
+export const MOBILE_PAYTABLE_HEIGHT = 126;
 
 /** Static rules and payout display for the slot screen. */
 export class PaytablePanel extends Container {
@@ -57,8 +58,35 @@ export class PaytablePanel extends Container {
       this.addChild(row);
     }
 
-    this.addRule("Win: 3+ same symbols from left", 0);
+    this.addRule("Win: 3+ adjacent same symbols", 0);
     this.addRule("Middle row only", 1);
+  }
+
+  public layoutDesktop() {
+    this.panel.setSize(PAYTABLE_PANEL_WIDTH, PAYTABLE_PANEL_HEIGHT);
+    this.title.y = -PAYTABLE_PANEL_HEIGHT * 0.5 + 42;
+    this.title.style.fontSize = 34;
+
+    for (let i = 0; i < this.rows.length; i++) {
+      const row = this.rows[i];
+
+      row.visible = true;
+      row.position.set(-92, -PAYTABLE_PANEL_HEIGHT * 0.5 + 88 + i * 30);
+    }
+
+    this.positionRules(PAYTABLE_PANEL_HEIGHT * 0.5 - 70);
+  }
+
+  public layoutMobile(width: number) {
+    this.panel.setSize(width, MOBILE_PAYTABLE_HEIGHT);
+    this.title.y = -MOBILE_PAYTABLE_HEIGHT * 0.5 + 26;
+    this.title.style.fontSize = 26;
+
+    for (const row of this.rows) {
+      row.visible = false;
+    }
+
+    this.positionRules(-4);
   }
 
   private addRule(text: string, index: number) {
@@ -75,5 +103,11 @@ export class PaytablePanel extends Container {
     rule.position.set(0, PAYTABLE_PANEL_HEIGHT * 0.5 - 70 + index * 30);
     this.rules.push(rule);
     this.addChild(rule);
+  }
+
+  private positionRules(startY: number) {
+    for (let i = 0; i < this.rules.length; i++) {
+      this.rules[i].y = startY + i * 30;
+    }
   }
 }

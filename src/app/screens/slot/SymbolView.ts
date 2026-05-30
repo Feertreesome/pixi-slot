@@ -27,12 +27,15 @@ export class SymbolView extends Container {
     super();
 
     this.highlight = new Graphics();
+    this.highlight.eventMode = "none";
     this.addChild(this.highlight);
 
     this.cell = new Graphics();
+    this.cell.eventMode = "none";
     this.addChild(this.cell);
 
     this.divider = new Graphics();
+    this.divider.eventMode = "none";
     this.addChild(this.divider);
 
     this.symbolLabel = new Label({

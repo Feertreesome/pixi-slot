@@ -1,4 +1,6 @@
 import { FancyButton } from "@pixi/ui";
+import type { FederatedPointerEvent } from "pixi.js";
+import { Rectangle } from "pixi.js";
 
 import { engine } from "../getEngine.ts";
 
@@ -17,6 +19,8 @@ type ButtonOptions = typeof defaultButtonOptions;
  * The big rectangle button, with a label, idle and pressed states
  */
 export class Button extends FancyButton {
+  private isPointerDown = false;
+
   constructor(options: Partial<ButtonOptions> = {}) {
     const opts = { ...defaultButtonOptions, ...options };
 
@@ -53,11 +57,68 @@ export class Button extends FancyButton {
       },
     });
 
-    this.width = opts.width;
-    this.height = opts.height;
+    // @pixi/ui chooses mouse or pointer listeners from user-agent detection.
+    // Use one pointer event path so touch devices and device emulation behave alike.
+    this.removeAllListeners();
+    this.eventMode = "static";
+    this.cursor = "pointer";
+    this.on("pointerdown", this.handlePointerDown, this);
+    this.on("pointerup", this.handlePointerUp, this);
+    this.on("pointerupoutside", this.handlePointerUpOutside, this);
+    this.on("pointercancel", this.handlePointerUpOutside, this);
+    this.on("pointertap", this.handlePointerTap, this);
+    this.on("pointerover", this.handlePointerOver, this);
+    this.on("pointerout", this.handlePointerOut, this);
+    this.setSize(opts.width, opts.height);
 
     this.onDown.connect(this.handleDown.bind(this));
     this.onHover.connect(this.handleHover.bind(this));
+  }
+
+  public override setSize(width: number, height: number) {
+    super.setSize(width, height);
+    this.hitArea = new Rectangle(-width * 0.5, -height * 0.5, width, height);
+  }
+
+  private handlePointerDown(event: FederatedPointerEvent) {
+    if (!this.enabled) return;
+
+    this.isPointerDown = true;
+    this.onDown.emit(this.button, event);
+  }
+
+  private handlePointerUp(event: FederatedPointerEvent) {
+    if (!this.isPointerDown) return;
+
+    this.isPointerDown = false;
+    this.onUp.emit(this.button, event);
+  }
+
+  private handlePointerUpOutside(event: FederatedPointerEvent) {
+    if (!this.isPointerDown) return;
+
+    this.isPointerDown = false;
+    this.onUp.emit(this.button, event);
+    this.onUpOut.emit(this.button, event);
+  }
+
+  private handlePointerTap(event: FederatedPointerEvent) {
+    if (!this.enabled) return;
+
+    this.isPointerDown = false;
+    this.onPress.emit(this.button, event);
+  }
+
+  private handlePointerOver(event: FederatedPointerEvent) {
+    if (event.pointerType === "mouse") {
+      this.onHover.emit(this.button, event);
+    }
+  }
+
+  private handlePointerOut(event: FederatedPointerEvent) {
+    if (!this.isPointerDown) {
+      this.onOut.emit(this.button, event);
+    }
   }
 
   private handleHover() {

@@ -3,6 +3,7 @@ import { Container, Graphics } from "pixi.js";
 
 import { Label } from "../../ui/Label.ts";
 
+import { MOBILE_MARGIN, MOBILE_WIDTH } from "./slotConfig.ts";
 import { SlotMachine } from "./SlotMachine.ts";
 
 /** Screen that hosts the fruit slot machine. */
@@ -20,9 +21,11 @@ export class SlotScreen extends Container {
     super();
 
     this.background = new Graphics();
+    this.background.eventMode = "none";
     this.addChild(this.background);
 
     this.headerBase = new Graphics();
+    this.headerBase.eventMode = "none";
     this.addChild(this.headerBase);
 
     this.title = new Label({
@@ -64,12 +67,21 @@ export class SlotScreen extends Container {
   public resize(width: number, height: number) {
     this.drawBackground(width, height);
 
+    if (width < MOBILE_WIDTH || height > width) {
+      this.layoutMobile(width, height);
+      return;
+    }
+
+    this.layoutDesktop(width, height);
+  }
+
+  private layoutDesktop(width: number, height: number) {
     const availableWidth = width * 0.92;
     const availableHeight = height * 0.84;
     const frameWidth = Math.min(availableWidth, availableHeight * (16 / 9));
     const frameHeight = frameWidth * (9 / 16);
 
-    this.drawHeader(width, height);
+    this.drawHeader(width, height, false);
     this.title.position.set(width * 0.5, Math.max(34, height * 0.045));
     this.title.style.fontSize = Math.max(28, Math.min(44, frameHeight * 0.08));
     this.balanceLabel.position.set(width * 0.5, this.title.y + 34);
@@ -78,12 +90,25 @@ export class SlotScreen extends Container {
       Math.min(22, frameHeight * 0.038),
     );
 
-    this.machine.setSize(frameWidth, frameHeight);
+    this.machine.layoutDesktop(frameWidth, frameHeight);
     this.machine.position.set(width * 0.5, height * 0.53);
     this.machine.pivot.set(
       this.machine.getContentWidth() * 0.5,
       this.machine.getContentHeight() * 0.5,
     );
+  }
+
+  private layoutMobile(width: number, height: number) {
+    const machineY = Math.max(66, height * 0.072);
+
+    this.drawHeader(width, height, true);
+    this.title.position.set(width * 0.5, Math.max(22, height * 0.022));
+    this.title.style.fontSize = 26;
+    this.balanceLabel.position.set(width * 0.5, this.title.y + 25);
+    this.balanceLabel.style.fontSize = 16;
+    this.machine.position.set(0, machineY);
+    this.machine.pivot.set(0);
+    this.machine.layoutMobile(width, height - machineY - MOBILE_MARGIN * 2);
   }
 
   /** Update child animations that use the existing navigation ticker. */
@@ -116,9 +141,11 @@ export class SlotScreen extends Container {
       .fill({ color: 0xb268ff, alpha: 0.18 });
   }
 
-  private drawHeader(width: number, height: number) {
-    const headerWidth = Math.min(width * 0.82, 520);
-    const headerHeight = Math.max(58, Math.min(76, height * 0.095));
+  private drawHeader(width: number, height: number, isMobile: boolean) {
+    const headerWidth = Math.min(width - MOBILE_MARGIN * 2, 520);
+    const headerHeight = isMobile
+      ? Math.max(54, Math.min(66, height * 0.08))
+      : Math.max(58, Math.min(76, height * 0.095));
     const x = (width - headerWidth) * 0.5;
     const y = Math.max(8, height * 0.012);
 

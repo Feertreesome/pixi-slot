@@ -22,9 +22,11 @@ export class PaylineView extends Container {
     this.heightValue = height;
 
     this.glow = new Graphics();
+    this.glow.eventMode = "none";
     this.addChild(this.glow);
 
     this.line = new Graphics();
+    this.line.eventMode = "none";
     this.addChild(this.line);
 
     this.leftLabel = this.createLabel();

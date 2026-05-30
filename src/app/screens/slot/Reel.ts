@@ -4,6 +4,7 @@ import { Container, Graphics } from "pixi.js";
 import { randomInt } from "../../../engine/utils/random.ts";
 
 import {
+  SLOT_MIDDLE_ROW_INDEX,
   SLOT_REEL_STOP_DELAY_MS,
   SLOT_SPIN_DURATION_MS,
   SLOT_SYMBOL_SIZE,
@@ -66,16 +67,19 @@ export class Reel extends Container {
     this.stopDelayMs = stopDelayMs;
 
     this.panel = new Graphics();
+    this.panel.eventMode = "none";
     this.addChild(this.panel);
 
     this.symbolContainer = new Container();
     this.addChild(this.symbolContainer);
 
     this.maskShape = new Graphics();
+    this.maskShape.eventMode = "none";
     this.addChild(this.maskShape);
     this.symbolContainer.mask = this.maskShape;
 
     this.overlay = new Graphics();
+    this.overlay.eventMode = "none";
     this.addChild(this.overlay);
 
     this.visibleSymbolIds = getRandomVisibleSymbols();
@@ -169,7 +173,7 @@ export class Reel extends Container {
   }
 
   public getMiddleSymbol(): SlotSymbolId {
-    return this.visibleSymbolIds[Math.floor(SLOT_VISIBLE_ROWS / 2)]!;
+    return this.visibleSymbolIds[SLOT_MIDDLE_ROW_INDEX]!;
   }
 
   public setSize(width: number, height: number) {
@@ -197,11 +201,11 @@ export class Reel extends Container {
 
     this.panel
       .clear()
-      .roundRect(0, 0, this.symbolWidth, height, 16)
+      .rect(0, 0, this.symbolWidth, height)
       .fill({ color: 0x080112 })
-      .roundRect(4, 4, this.symbolWidth - 8, height - 8, 13)
+      .rect(4, 0, this.symbolWidth - 8, height)
       .fill({ color: 0x18052d })
-      .roundRect(10, 10, this.symbolWidth - 20, height - 20, 9)
+      .rect(10, 0, this.symbolWidth - 20, height)
       .fill({ color: 0x2b0a4f });
 
     this.overlay
