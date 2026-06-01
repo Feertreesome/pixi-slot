@@ -18,10 +18,10 @@ const WIN_PULSE_DURATION_MS = 1200;
 export class SlotHud extends Container {
   private panel: RoundedBox;
   private betBox: RoundedBox;
-  private totalBetBox: RoundedBox;
+  private balanceBox: RoundedBox;
   private winBox: RoundedBox;
   private betLabel: Label;
-  private totalBetLabel: Label;
+  private balanceLabel: Label;
   private winLabel: Label;
   private displayedWin?: number;
   private winFeedbackStartTime?: number;
@@ -42,9 +42,9 @@ export class SlotHud extends Container {
     this.betBox.position.set(-242, 0);
     this.addChild(this.betBox);
 
-    this.totalBetBox = this.createValueBox(BOX_WIDTH, 0x2b0d4f);
-    this.totalBetBox.position.set(0, 0);
-    this.addChild(this.totalBetBox);
+    this.balanceBox = this.createValueBox(BOX_WIDTH, 0x2b0d4f);
+    this.balanceBox.position.set(0, 0);
+    this.addChild(this.balanceBox);
 
     this.winBox = this.createValueBox(WIN_BOX_WIDTH, 0x5c143d);
     this.winBox.position.set(248, 0);
@@ -54,9 +54,9 @@ export class SlotHud extends Container {
     this.betLabel.position.copyFrom(this.betBox.position);
     this.addChild(this.betLabel);
 
-    this.totalBetLabel = this.createValueLabel("TOTAL BET: 500");
-    this.totalBetLabel.position.copyFrom(this.totalBetBox.position);
-    this.addChild(this.totalBetLabel);
+    this.balanceLabel = this.createValueLabel("BALANCE: 10000");
+    this.balanceLabel.position.copyFrom(this.balanceBox.position);
+    this.addChild(this.balanceLabel);
 
     this.winLabel = this.createValueLabel("WIN: 0", true);
     this.winLabel.position.copyFrom(this.winBox.position);
@@ -67,8 +67,8 @@ export class SlotHud extends Container {
     this.betLabel.text = `BET: ${value}`;
   }
 
-  public setTotalBet(value: number) {
-    this.totalBetLabel.text = `TOTAL BET: ${value}`;
+  public setBalance(value: number) {
+    this.balanceLabel.text = `BALANCE: ${value}`;
   }
 
   public setWin(value: number) {
@@ -117,10 +117,10 @@ export class SlotHud extends Container {
   public layoutDesktop() {
     this.panel.setSize(HUD_WIDTH, HUD_HEIGHT);
     this.betBox.setSize(BOX_WIDTH, BOX_HEIGHT);
-    this.totalBetBox.setSize(BOX_WIDTH, BOX_HEIGHT);
+    this.balanceBox.setSize(BOX_WIDTH, BOX_HEIGHT);
     this.winBox.setSize(WIN_BOX_WIDTH, BOX_HEIGHT);
     this.betBox.position.set(-242, 0);
-    this.totalBetBox.position.set(0, 0);
+    this.balanceBox.position.set(0, 0);
     this.winBox.position.set(248, 0);
     this.layoutLabels(23, 30);
   }
@@ -131,10 +131,10 @@ export class SlotHud extends Container {
 
     this.panel.setSize(width, MOBILE_HUD_HEIGHT);
     this.betBox.setSize(boxWidth, BOX_HEIGHT);
-    this.totalBetBox.setSize(boxWidth, BOX_HEIGHT);
+    this.balanceBox.setSize(boxWidth, BOX_HEIGHT);
     this.winBox.setSize(boxWidth, BOX_HEIGHT);
     this.betBox.position.set(-boxOffset, 0);
-    this.totalBetBox.position.set(0, 0);
+    this.balanceBox.position.set(0, 0);
     this.winBox.position.set(boxOffset, 0);
     this.layoutLabels(18, 22);
   }
@@ -164,10 +164,10 @@ export class SlotHud extends Container {
 
   private layoutLabels(fontSize: number, winFontSize: number) {
     this.betLabel.position.copyFrom(this.betBox.position);
-    this.totalBetLabel.position.copyFrom(this.totalBetBox.position);
+    this.balanceLabel.position.copyFrom(this.balanceBox.position);
     this.winLabel.position.copyFrom(this.winBox.position);
     this.betLabel.style.fontSize = fontSize;
-    this.totalBetLabel.style.fontSize = fontSize;
+    this.balanceLabel.style.fontSize = fontSize;
     this.winLabel.style.fontSize = winFontSize;
   }
 }

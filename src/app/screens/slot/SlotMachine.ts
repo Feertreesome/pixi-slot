@@ -4,8 +4,15 @@ import { Container, Graphics } from "pixi.js";
 import { randomInt } from "../../../engine/utils/random.ts";
 import { waitFor } from "../../../engine/utils/waitFor.ts";
 import { Button } from "../../ui/Button.ts";
+import { Label } from "../../ui/Label.ts";
 
 import {
+  BET_STEP,
+  DEFAULT_BET,
+  INITIAL_BALANCE,
+  MAX_BET,
+  MIN_BET,
+  REFILL_AMOUNT,
   SLOT_BOARD_HEIGHT,
   SLOT_BOARD_WIDTH,
   MOBILE_MARGIN,
@@ -33,8 +40,6 @@ import type {
   WinCalculationResult,
 } from "./slotTypes.ts";
 
-const INITIAL_BET = 100;
-const MAX_BET = 500;
 const AUTO_SPIN_DELAY_SECS = 0.35;
 const FRAME_PADDING = 26;
 const CONTROL_PANEL_WIDTH = 760;
@@ -77,17 +82,25 @@ export class SlotMachine extends Container {
   private spinButtonLayout: Container;
   private autoSpinButtonLayout: Container;
   private maxBetButtonLayout: Container;
+  private decreaseBetButtonLayout: Container;
+  private increaseBetButtonLayout: Container;
+  private addCreditsButtonLayout: Container;
   private spinButton: Button;
   private autoSpinButton: Button;
   private maxBetButton: Button;
-  private bet = INITIAL_BET;
-  private win = 0;
+  private decreaseBetButton: Button;
+  private increaseBetButton: Button;
+  private addCreditsButton: Button;
+  private statusLabel: Label;
+  private balance = INITIAL_BALANCE;
+  private bet = DEFAULT_BET;
+  private lastWin = 0;
   private currentSpinResult?: SpinResult;
   private isSpinning = false;
   private isAutoSpin = false;
   private winFeedbackStartTime?: number;
 
-  constructor() {
+  constructor(private readonly onBalanceChanged?: (balance: number) => void) {
     super();
 
     this.reelArea = new Container();
@@ -195,28 +208,90 @@ export class SlotMachine extends Container {
     this.maxBetButton.onPress.connect(() => this.setMaxBet());
     this.maxBetButtonLayout.addChild(this.maxBetButton);
 
+    this.decreaseBetButtonLayout = new Container();
+    this.addChild(this.decreaseBetButtonLayout);
+
+    this.decreaseBetButton = new Button({
+      text: "BET -",
+      width: 128,
+      height: 72,
+      fontSize: 21,
+    });
+    this.decreaseBetButton.tint = 0x6d39bd;
+    this.decreaseBetButton.onPress.connect(() => this.decreaseBet());
+    this.decreaseBetButtonLayout.addChild(this.decreaseBetButton);
+
+    this.increaseBetButtonLayout = new Container();
+    this.addChild(this.increaseBetButtonLayout);
+
+    this.increaseBetButton = new Button({
+      text: "BET +",
+      width: 128,
+      height: 72,
+      fontSize: 21,
+    });
+    this.increaseBetButton.tint = 0x6d39bd;
+    this.increaseBetButton.onPress.connect(() => this.increaseBet());
+    this.increaseBetButtonLayout.addChild(this.increaseBetButton);
+
+    this.addCreditsButtonLayout = new Container();
+    this.addChild(this.addCreditsButtonLayout);
+
+    this.addCreditsButton = new Button({
+      text: "ADD CREDITS",
+      width: 292,
+      height: 92,
+      fontSize: 27,
+    });
+    this.addCreditsButton.tint = 0x4f9d55;
+    this.addCreditsButton.onPress.connect(() => this.addCredits(REFILL_AMOUNT));
+    this.addCreditsButtonLayout.addChild(this.addCreditsButton);
+
+    this.statusLabel = new Label({
+      style: {
+        fill: 0xffffff,
+        fontSize: 20,
+        stroke: {
+          color: 0x1a072f,
+          width: 4,
+        },
+      },
+    });
+    this.statusLabel.eventMode = "none";
+    this.statusLabel.visible = false;
+    this.addChild(this.statusLabel);
+
     this.drawChrome();
     this.layoutDesktop(MACHINE_WIDTH, MACHINE_HEIGHT);
-    this.updateHud();
+    this.updateMoneyUi();
+    this.updateControlsEnabled();
   }
 
   public async spin(): Promise<void> {
     if (this.isSpinning) return;
+    if (!this.canSpin()) {
+      this.stopAutoSpin();
+      this.showBalancePrompt();
+      return;
+    }
 
+    const spinBet = this.bet;
     this.setSpinning(true);
-    this.win = 0;
+    this.balance -= spinBet;
+    this.lastWin = 0;
     this.clearWinFeedback();
-    this.updateHud();
+    this.hideBalancePrompt();
+    this.updateMoneyUi();
 
     // Generate the full outcome before animation starts.
     // Reels only present this predefined result; win math never depends on random animation frames.
-    const spinResult = this.generateSpinResult();
+    const spinResult = this.generateSpinResult(spinBet);
     this.currentSpinResult = spinResult;
     const currentSpinResult = this.currentSpinResult;
     const predefinedMiddleSymbols = currentSpinResult.reels.map((result) =>
       this.getMiddleSymbol(result),
     );
-    const predefinedWin = this.calculateWin(predefinedMiddleSymbols);
+    const predefinedWin = this.calculateWin(predefinedMiddleSymbols, spinBet);
 
     // Start all reels together; each reel has its own stop delay, so they settle left-to-right.
     const reelResults = await Promise.all(
@@ -235,16 +310,23 @@ export class SlotMachine extends Container {
       ? predefinedWin
       : this.getNoWinResult();
 
-    this.win = winResult.amount;
+    this.lastWin = winResult.amount;
+    this.balance += this.lastWin;
+    this.clampBetToBalance();
     this.setSpinning(false);
-    this.updateHud();
+    this.updateMoneyUi();
 
-    if (this.win > 0) {
+    if (this.lastWin > 0) {
       this.paylineView.setWinning(true);
       this.applyWinningHighlights(winResult.winningReelIndexes);
       this.startWinFeedback();
     } else {
       this.clearWinFeedback();
+    }
+
+    if (!this.canSpin()) {
+      this.stopAutoSpin();
+      this.showBalancePrompt();
     }
   }
 
@@ -293,6 +375,22 @@ export class SlotMachine extends Container {
       MACHINE_WIDTH * 0.5 + 260,
       SLOT_BOARD_HEIGHT + 286,
     );
+    this.decreaseBetButtonLayout.scale.set(1);
+    this.decreaseBetButtonLayout.position.set(
+      MACHINE_WIDTH * 0.5 - 418,
+      SLOT_BOARD_HEIGHT + 286,
+    );
+    this.increaseBetButtonLayout.scale.set(1);
+    this.increaseBetButtonLayout.position.set(
+      MACHINE_WIDTH * 0.5 + 418,
+      SLOT_BOARD_HEIGHT + 286,
+    );
+    this.addCreditsButtonLayout.scale.set(1);
+    this.addCreditsButtonLayout.position.copyFrom(
+      this.spinButtonLayout.position,
+    );
+    this.statusLabel.position.set(MACHINE_WIDTH * 0.5, SLOT_BOARD_HEIGHT + 205);
+    this.statusLabel.style.fontSize = 20;
     this.spinGlow.position.copyFrom(this.spinButtonLayout.position);
   }
 
@@ -310,10 +408,14 @@ export class SlotMachine extends Container {
       (controlsWidth - layoutGap) / (188 * 2),
     );
     const secondaryButtonHalfHeight = 36 * secondaryButtonScale;
+    const betButtonScale = Math.min(1, (controlsWidth - layoutGap) / (128 * 2));
+    const betButtonHalfHeight = 36 * betButtonScale;
     const hudY = reelHeight + layoutGap + 41;
     const spinY = hudY + 41 + layoutGap + spinButtonHalfHeight;
+    const betButtonY =
+      spinY + spinButtonHalfHeight + layoutGap + betButtonHalfHeight;
     const secondaryButtonY =
-      spinY + spinButtonHalfHeight + layoutGap + secondaryButtonHalfHeight;
+      betButtonY + betButtonHalfHeight + layoutGap + secondaryButtonHalfHeight;
     const paytableY =
       secondaryButtonY +
       secondaryButtonHalfHeight +
@@ -339,6 +441,25 @@ export class SlotMachine extends Container {
       width * 0.5 + controlsWidth * 0.26,
       secondaryButtonY,
     );
+    this.decreaseBetButtonLayout.scale.set(betButtonScale);
+    this.decreaseBetButtonLayout.position.set(
+      width * 0.5 - controlsWidth * 0.24,
+      betButtonY,
+    );
+    this.increaseBetButtonLayout.scale.set(betButtonScale);
+    this.increaseBetButtonLayout.position.set(
+      width * 0.5 + controlsWidth * 0.24,
+      betButtonY,
+    );
+    this.addCreditsButtonLayout.scale.set(spinButtonScale);
+    this.addCreditsButtonLayout.position.copyFrom(
+      this.spinButtonLayout.position,
+    );
+    this.statusLabel.position.set(
+      width * 0.5,
+      spinY - spinButtonHalfHeight - 10,
+    );
+    this.statusLabel.style.fontSize = 16;
     this.paytablePanel.layoutMobile(paytableWidth);
     this.paytablePanel.scale.set(1);
     this.paytablePanel.position.set(width * 0.5, paytableY);
@@ -368,6 +489,12 @@ export class SlotMachine extends Container {
     if (!this.isAutoSpin || this.isSpinning) return;
 
     while (this.isAutoSpin) {
+      if (!this.canSpin()) {
+        this.stopAutoSpin();
+        this.showBalancePrompt();
+        break;
+      }
+
       await this.spin();
       if (this.isAutoSpin) {
         await waitFor(AUTO_SPIN_DELAY_SECS);
@@ -375,21 +502,105 @@ export class SlotMachine extends Container {
     }
   }
 
-  private setMaxBet() {
+  private setBet(value: number) {
     if (this.isSpinning) return;
 
-    this.bet = MAX_BET;
-    this.updateHud();
+    const maxAvailableBet = Math.min(MAX_BET, this.balance);
+
+    this.bet =
+      maxAvailableBet >= MIN_BET
+        ? Math.min(Math.max(value, MIN_BET), maxAvailableBet)
+        : MIN_BET;
+    this.hideBalancePrompt();
+    this.updateMoneyUi();
+    this.updateControlsEnabled();
+  }
+
+  private increaseBet() {
+    this.setBet(this.bet + BET_STEP);
+  }
+
+  private decreaseBet() {
+    this.setBet(this.bet - BET_STEP);
+  }
+
+  private setMaxBet() {
+    this.setBet(Math.min(MAX_BET, this.balance));
+  }
+
+  private canSpin(): boolean {
+    return !this.isSpinning && this.balance >= this.bet && this.balance > 0;
+  }
+
+  private addCredits(amount: number) {
+    if (this.isSpinning) return;
+
+    this.balance += amount;
+    this.clampBetToBalance();
+    this.hideBalancePrompt();
+    this.updateMoneyUi();
+    this.updateControlsEnabled();
+  }
+
+  private clampBetToBalance() {
+    if (this.balance >= MIN_BET) {
+      this.bet = Math.min(this.bet, this.balance, MAX_BET);
+      return;
+    }
+
+    this.bet = MIN_BET;
+  }
+
+  private updateControlsEnabled() {
+    const canChangeMoney = !this.isSpinning && this.balance > 0;
+    const needsCredits = this.balance <= 0;
+    const showCredits = needsCredits && !this.isSpinning;
+
+    this.setButtonEnabled(this.spinButton, this.canSpin());
+    this.setButtonEnabled(this.autoSpinButton, canChangeMoney);
+    this.setButtonEnabled(this.maxBetButton, canChangeMoney);
+    this.setButtonEnabled(this.decreaseBetButton, canChangeMoney);
+    this.setButtonEnabled(this.increaseBetButton, canChangeMoney);
+    this.setButtonEnabled(
+      this.addCreditsButton,
+      !this.isSpinning && needsCredits,
+    );
+    this.autoSpinButton.alpha = this.isAutoSpin
+      ? 0.7
+      : this.autoSpinButton.alpha;
+    this.spinButtonLayout.visible = !showCredits;
+    this.spinGlow.visible = !showCredits;
+    this.addCreditsButtonLayout.visible = showCredits;
+  }
+
+  private setButtonEnabled(button: Button, enabled: boolean) {
+    button.enabled = enabled;
+    button.alpha = enabled ? 1 : 0.55;
+  }
+
+  private showBalancePrompt() {
+    this.statusLabel.text =
+      this.balance <= 0
+        ? `Balance is empty. Add ${REFILL_AMOUNT} credits?`
+        : "Not enough balance";
+    this.statusLabel.visible = true;
+    this.updateControlsEnabled();
+  }
+
+  private hideBalancePrompt() {
+    this.statusLabel.visible = false;
+  }
+
+  private stopAutoSpin() {
+    this.isAutoSpin = false;
+    this.autoSpinButton.alpha = 1;
   }
 
   private setSpinning(isSpinning: boolean) {
     this.isSpinning = isSpinning;
-    this.spinButton.enabled = !isSpinning;
-    this.spinButton.alpha = isSpinning ? 0.55 : 1;
     this.spinGlow.alpha = isSpinning ? 0.14 : this.spinGlow.alpha;
-    this.maxBetButton.enabled = !isSpinning;
-    this.maxBetButton.alpha = isSpinning ? 0.55 : 1;
     this.hud.setSpinning(isSpinning);
+    this.updateControlsEnabled();
   }
 
   private clearReelHighlights() {
@@ -415,7 +626,7 @@ export class SlotMachine extends Container {
     const startTime = performance.now();
 
     this.winFeedbackStartTime = startTime;
-    this.hud.startWinFeedback(this.win, startTime);
+    this.hud.startWinFeedback(this.lastWin, startTime);
   }
 
   private clearWinFeedback() {
@@ -441,13 +652,14 @@ export class SlotMachine extends Container {
     this.winHighlight.alpha = Math.sin(progress * Math.PI) * 0.78;
   }
 
-  private updateHud() {
+  private updateMoneyUi() {
     this.hud.setBet(this.bet);
-    this.hud.setTotalBet(this.bet * SLOT_REEL_COUNT);
-    this.hud.setWin(this.win);
+    this.hud.setBalance(this.balance);
+    this.hud.setWin(this.lastWin);
+    this.onBalanceChanged?.(this.balance);
   }
 
-  private generateSpinResult(): SpinResult {
+  private generateSpinResult(spinBet: number): SpinResult {
     const reels: ReelResult[] = Array.from(
       { length: SLOT_REEL_COUNT },
       (_, i) => ({
@@ -456,9 +668,9 @@ export class SlotMachine extends Container {
       }),
     );
     const middleSymbols = reels.map((result) => this.getMiddleSymbol(result));
-    const winResult = this.calculateWin(middleSymbols);
+    const winResult = this.calculateWin(middleSymbols, spinBet);
     const totalPayoutMultiplier =
-      winResult.amount > 0 ? winResult.amount / this.bet : 0;
+      winResult.amount > 0 ? winResult.amount / spinBet : 0;
 
     return {
       reels,
@@ -478,7 +690,10 @@ export class SlotMachine extends Container {
     return result.symbols[SLOT_MIDDLE_ROW_INDEX]!;
   }
 
-  private calculateWin(middleSymbols: SlotSymbolId[]): WinCalculationResult {
+  private calculateWin(
+    middleSymbols: SlotSymbolId[],
+    spinBet: number,
+  ): WinCalculationResult {
     let bestSymbolId: SlotSymbolId | null = null;
     let bestCount = 0;
     let bestStartIndex = -1;
@@ -519,7 +734,7 @@ export class SlotMachine extends Container {
     }
 
     return {
-      amount: this.bet * symbolConfig.payoutMultiplier,
+      amount: spinBet * symbolConfig.payoutMultiplier,
       symbolId: bestSymbolId,
       count: bestCount,
       winningReelIndexes: Array.from(

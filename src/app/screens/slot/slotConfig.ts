@@ -6,6 +6,13 @@ export const SLOT_MIDDLE_ROW_INDEX = Math.floor(SLOT_VISIBLE_ROWS / 2);
 export const MOBILE_WIDTH = 600;
 export const MOBILE_MARGIN = 16;
 
+export const INITIAL_BALANCE = 10000;
+export const DEFAULT_BET = 100;
+export const MIN_BET = 5;
+export const BET_STEP = 5;
+export const MAX_BET = 500;
+export const REFILL_AMOUNT = 1000;
+
 export const SLOT_SYMBOL_SIZE = 120;
 export const SLOT_REEL_GAP = 16;
 export const SLOT_BOARD_WIDTH =

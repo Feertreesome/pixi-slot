@@ -54,7 +54,9 @@ export class SlotScreen extends Container {
     });
     this.addChild(this.balanceLabel);
 
-    this.machine = new SlotMachine();
+    this.machine = new SlotMachine((balance) => {
+      this.balanceLabel.text = `BALANCE: ${balance}`;
+    });
     this.addChild(this.machine);
   }
 
