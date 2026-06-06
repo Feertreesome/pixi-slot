@@ -1,10 +1,17 @@
 import type { Ticker } from "pixi.js";
 import { Container, Graphics } from "pixi.js";
+import { createActor } from "xstate";
 
+import {
+  slotMachine,
+  type SlotMachineActor,
+} from "../../../machines/slotMachine.ts";
 import { Label } from "../../ui/Label.ts";
 
 import { MOBILE_MARGIN, MOBILE_WIDTH } from "./slotConfig.ts";
-import { SlotMachine } from "./SlotMachine.ts";
+import { SlotMachine, SLOT_MACHINE_DESKTOP_MAX_WIDTH } from "./SlotMachine.ts";
+
+type ActorSubscription = ReturnType<SlotMachineActor["subscribe"]>;
 
 /** Screen that hosts the fruit slot machine. */
 export class SlotScreen extends Container {
@@ -16,9 +23,18 @@ export class SlotScreen extends Container {
   private title: Label;
   private balanceLabel: Label;
   private machine: SlotMachine;
+  private slotActor: SlotMachineActor;
+  private slotSubscription?: ActorSubscription;
 
   constructor() {
     super();
+
+    this.slotActor = createActor(slotMachine, {
+      input: {
+        spinReels: (bet) => this.machine.runSpinAnimation(bet),
+      },
+    });
+    this.slotActor.start();
 
     this.background = new Graphics();
     this.background.eventMode = "none";
@@ -54,10 +70,14 @@ export class SlotScreen extends Container {
     });
     this.addChild(this.balanceLabel);
 
-    this.machine = new SlotMachine((balance) => {
+    this.machine = new SlotMachine(this.slotActor, (balance) => {
       this.balanceLabel.text = `BALANCE: ${balance}`;
     });
     this.addChild(this.machine);
+
+    this.slotSubscription = this.slotActor.subscribe((snapshot) => {
+      this.balanceLabel.text = `BALANCE: ${snapshot.context.balance}`;
+    });
   }
 
   /** Prepare the screen just before showing. */
@@ -78,9 +98,16 @@ export class SlotScreen extends Container {
   }
 
   private layoutDesktop(width: number, height: number) {
-    const availableWidth = width * 0.92;
+    const availableWidth = Math.min(
+      width * 0.92,
+      SLOT_MACHINE_DESKTOP_MAX_WIDTH,
+    );
     const availableHeight = height * 0.84;
-    const frameWidth = Math.min(availableWidth, availableHeight * (16 / 9));
+    const frameWidth = Math.min(
+      availableWidth,
+      availableHeight * (16 / 9),
+      SLOT_MACHINE_DESKTOP_MAX_WIDTH,
+    );
     const frameHeight = frameWidth * (9 / 16);
 
     this.drawHeader(width, height, false);
@@ -125,6 +152,12 @@ export class SlotScreen extends Container {
 
   /** Hide screen with the navigation lifecycle. */
   public async hide(): Promise<void> {}
+
+  public override destroy(options?: Parameters<Container["destroy"]>[0]) {
+    this.slotSubscription?.unsubscribe();
+    this.slotActor.stop();
+    super.destroy(options);
+  }
 
   private drawBackground(width: number, height: number) {
     this.background.clear();

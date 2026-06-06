@@ -11,6 +11,7 @@ const defaultButtonOptions = {
   width: 301,
   height: 112,
   fontSize: 28,
+  textOffsetY: -13,
 };
 
 type ButtonOptions = typeof defaultButtonOptions;
@@ -20,23 +21,25 @@ type ButtonOptions = typeof defaultButtonOptions;
  */
 export class Button extends FancyButton {
   private isPointerDown = false;
+  private label: Label;
 
   constructor(options: Partial<ButtonOptions> = {}) {
     const opts = { ...defaultButtonOptions, ...options };
+    const label = new Label({
+      text: opts.text,
+      style: {
+        fill: 0x4a4a4a,
+        align: "center",
+        fontSize: opts.fontSize,
+      },
+    });
 
     super({
       defaultView: "button.png",
       nineSliceSprite: [38, 50, 38, 50],
       anchor: 0.5,
-      text: new Label({
-        text: opts.text,
-        style: {
-          fill: 0x4a4a4a,
-          align: "center",
-          fontSize: opts.fontSize,
-        },
-      }),
-      textOffset: { x: 0, y: -13 },
+      text: label,
+      textOffset: { x: 0, y: opts.textOffsetY },
       defaultTextAnchor: 0.5,
       scale: 0.9,
       animations: {
@@ -56,6 +59,8 @@ export class Button extends FancyButton {
         },
       },
     });
+
+    this.label = label;
 
     // @pixi/ui chooses mouse or pointer listeners from user-agent detection.
     // Use one pointer event path so touch devices and device emulation behave alike.
@@ -78,6 +83,10 @@ export class Button extends FancyButton {
   public override setSize(width: number, height: number) {
     super.setSize(width, height);
     this.hitArea = new Rectangle(-width * 0.5, -height * 0.5, width, height);
+  }
+
+  public setText(text: string) {
+    this.label.text = text;
   }
 
   private handlePointerDown(event: FederatedPointerEvent) {

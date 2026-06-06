@@ -44,6 +44,11 @@ export class PaylineView extends Container {
     this.line.alpha = isWinning ? 0.95 : 0.42;
   }
 
+  public setLabelsVisible(visible: boolean) {
+    this.leftLabel.visible = visible;
+    this.rightLabel.visible = visible;
+  }
+
   public update(time: Ticker) {
     if (!this.isWinning) return;
 

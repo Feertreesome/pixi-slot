@@ -3,7 +3,7 @@ import type { SlotSymbolConfig } from "./slotTypes.ts";
 export const SLOT_REEL_COUNT = 5;
 export const SLOT_VISIBLE_ROWS = 3;
 export const SLOT_MIDDLE_ROW_INDEX = Math.floor(SLOT_VISIBLE_ROWS / 2);
-export const MOBILE_WIDTH = 600;
+export const MOBILE_WIDTH = 768;
 export const MOBILE_MARGIN = 16;
 
 export const INITIAL_BALANCE = 10000;
